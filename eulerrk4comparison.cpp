@@ -58,6 +58,8 @@ EulerRK4Comparison::EulerRK4Comparison()
     // TODO: Register additional properties
     addProperty(stepSizeEuler);
     addProperty(integrationStepsEuler);
+    addProperty(stepSizeRK4);
+    addProperty(integrationStepsRK4);
 
 }
 
