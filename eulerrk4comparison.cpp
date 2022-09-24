@@ -124,7 +124,7 @@ void EulerRK4Comparison::process() {
 
     // Draw start point
     dvec2 startPoint = propStartPoint.get();
-    Integrator::drawPoint(startPoint, black, indexBufferPoints.get(), vertices);
+    //Integrator::drawPoint(startPoint, black, indexBufferPoints.get(), vertices);
 
     // TODO: Implement the Euler and Runge-Kutta of 4th order integration schemes
     // and then integrate forward for a specified number of integration steps and a given stepsize
@@ -133,22 +133,24 @@ void EulerRK4Comparison::process() {
     auto nextPointEuler = startPoint;
     float scalarvalueEuler = stepSizeEuler.get();
     int integratestepsEuler = integrationStepsEuler.get();
+    vec4 red = vec4(1, 0, 0, 1);
 
-    //Mohamad: Right now having troubles with getting different colors.
+    //Mohamad: Right now having troubles drawing line between the points.
 
     
     for (int i = 1; i < integratestepsEuler + 1; i++) {
         nextPointEuler = Integrator::Euler(vectorField, nextPointEuler, scalarvalueEuler);
-        Integrator::drawPoint(nextPointEuler, black, indexBufferPoints.get(), vertices);
+        Integrator::drawPoint(nextPointEuler, red, indexBufferPoints.get(), vertices);
     }
 
     auto nextPointRK4 = startPoint;
     float scalarvalueRK4 = stepSizeRK4.get();
     int integratestepsRK4 = integrationStepsRK4.get();
- 
+    vec4 blue = vec4(0, 0, 1, 1);
+
     for (int i = 1; i < integratestepsRK4 + 1; i++) {
         nextPointRK4 = Integrator::RK4(vectorField, nextPointRK4, scalarvalueRK4);
-        Integrator::drawPoint(nextPointRK4, black, indexBufferPoints.get(), vertices);
+        Integrator::drawPoint(nextPointRK4, blue, indexBufferPoints.get(), vertices);
     }
 
 
