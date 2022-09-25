@@ -138,6 +138,9 @@ void EulerRK4Comparison::process() {
     std::vector<vec2> eulerPoints;
     eulerPoints.push_back(nextPointEuler);
     
+    Integrator::drawPoint(nextPointEuler, red, indexBufferPoints.get(), vertices);
+
+    
     for (int i = 1; i < integratestepsEuler + 1; i++) {
         nextPointEuler = Integrator::Euler(vectorField, nextPointEuler, scalarvalueEuler);
         Integrator::drawLineSegment(vec2(eulerPoints[0][0], eulerPoints[0][1]),
@@ -156,6 +159,9 @@ void EulerRK4Comparison::process() {
     
     std::vector<vec2> RK4Points;
     RK4Points.push_back(nextPointRK4);
+    
+    Integrator::drawPoint(nextPointRK4, blue, indexBufferPoints.get(), vertices);
+
 
     for (int i = 1; i < integratestepsRK4 + 1; i++) {
         nextPointRK4 = Integrator::RK4(vectorField, nextPointRK4, scalarvalueRK4);
