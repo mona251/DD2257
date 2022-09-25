@@ -98,9 +98,9 @@ void EulerRK4Comparison::process() {
     auto mesh = std::make_shared<BasicMesh>();
     std::vector<BasicMesh::Vertex> vertices;
 
-    auto indexBufferEuler = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::Strip);
-    auto indexBufferRK = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::Strip);
     auto indexBufferPoints = mesh->addIndexBuffer(DrawType::Points, ConnectivityType::None);
+    auto indexBufferLine = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::None);
+
 
     auto bboxMesh = std::make_shared<BasicMesh>();
     std::vector<BasicMesh::Vertex> bboxVertices;
@@ -135,22 +135,36 @@ void EulerRK4Comparison::process() {
     int integratestepsEuler = integrationStepsEuler.get();
     vec4 red = vec4(1, 0, 0, 1);
 
-    //Mohamad: Right now having troubles drawing line between the points.
-
+    std::vector<vec2> eulerPoints;
+    eulerPoints.push_back(nextPointEuler);
     
     for (int i = 1; i < integratestepsEuler + 1; i++) {
         nextPointEuler = Integrator::Euler(vectorField, nextPointEuler, scalarvalueEuler);
+        Integrator::drawLineSegment(vec2(eulerPoints[0][0], eulerPoints[0][1]),
+                                    vec2(nextPointEuler[0], nextPointEuler[1]), red,
+                                    indexBufferLine.get(), vertices);
         Integrator::drawPoint(nextPointEuler, red, indexBufferPoints.get(), vertices);
+        
+        eulerPoints.pop_back();
+        eulerPoints.push_back(nextPointEuler);
     }
 
     auto nextPointRK4 = startPoint;
     float scalarvalueRK4 = stepSizeRK4.get();
     int integratestepsRK4 = integrationStepsRK4.get();
     vec4 blue = vec4(0, 0, 1, 1);
+    
+    std::vector<vec2> RK4Points;
+    RK4Points.push_back(nextPointRK4);
 
     for (int i = 1; i < integratestepsRK4 + 1; i++) {
         nextPointRK4 = Integrator::RK4(vectorField, nextPointRK4, scalarvalueRK4);
+        Integrator::drawLineSegment(vec2(RK4Points[0][0], RK4Points[0][1]),
+                                    vec2(nextPointRK4[0], nextPointRK4[1]), blue,
+                                    indexBufferLine.get(), vertices);
         Integrator::drawPoint(nextPointRK4, blue, indexBufferPoints.get(), vertices);
+        RK4Points.pop_back();
+        RK4Points.push_back(nextPointRK4);
     }
 
 
