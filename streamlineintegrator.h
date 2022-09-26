@@ -74,8 +74,8 @@ protected:
     // (TODO: You could define some helper functions here,
     // e.g. a function creating a single streamline from one seed point)
 	int DrawStreamLine(const vec2& startPoint, const VectorField2& vectorField, const float stepSize, const int direction, const bool directionField,
-						const int nSteps, const float maxArcLength, const float minSpeed, const bool displayPoints, std::shared_ptr<BasicMesh>& mesh,
-						std::vector<BasicMesh::Vertex>& vertices);
+                        const int nSteps, const float maxArcLength, const float minSpeed, const bool displayPoints, std::shared_ptr<BasicMesh>& mesh,
+                        std::vector<BasicMesh::Vertex>& vertices);
 
 // Ports
 public:
@@ -95,12 +95,12 @@ public:
     BoolProperty propDisplayPoints;
     IntProperty propNumStepsTaken;
     EventProperty mouseMoveStart;
-	TemplateOptionProperty<int> propDirection;
-	DoubleProperty propStepSize;
-	BoolProperty propDirectionField;
-	IntProperty propStopCondSteps;
-	FloatProperty propStopCondLength;
-	FloatProperty propStopCondVel;
+    TemplateOptionProperty<int> propDirection;
+    DoubleProperty propStepSize;
+    BoolProperty propDirectionField;
+    IntProperty propStopCondSteps;
+    FloatProperty propStopCondLength;
+    FloatProperty propStopCondVel;
 
     // TODO: Declare additional properties
     // Some types that you might need are given below
