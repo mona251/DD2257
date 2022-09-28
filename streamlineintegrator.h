@@ -24,6 +24,8 @@
 #include <labstreamlines/labstreamlinesmoduledefine.h>
 #include <labutils/scalarvectorfield.h>
 
+#include <random>
+
 namespace inviwo {
 
 /** \docpage{org.inviwo.StreamlineIntegrator, Streamline Integrator}
@@ -78,6 +80,7 @@ protected:
 						std::vector<BasicMesh::Vertex>& vertices);
     
     double lengthVec2(const vec2 vec);
+    float randomValue(const float min, const float max) const;
 
 // Ports
 public:
@@ -103,6 +106,10 @@ public:
 	IntProperty propStopCondSteps;
 	FloatProperty propStopCondLength;
 	FloatProperty propStopCondVel;
+    IntProperty propNumberOfStreamLines;
+    TemplateOptionProperty<int> propLineSeeding;
+    IntProperty propSeedLinesGridX;
+    IntProperty propSeedLinesGridY;
 
     // TODO: Declare additional properties
     // Some types that you might need are given below
@@ -116,6 +123,8 @@ public:
 private:
     dvec2 BBoxMin_{0, 0};
     dvec2 BBoxMax_{0, 0};
+    mutable std::mt19937 randGenerator;
+    mutable std::uniform_real_distribution<float> uniformReal;
 };
 
 }  // namespace inviwo
