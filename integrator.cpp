@@ -31,23 +31,27 @@ namespace inviwo {
  dvec2 Integrator::RK4(const VectorField2& vectorField, const dvec2& position, double scalar, bool backwards, bool normalized) {
 
     auto vf1 = vectorField.interpolate(position); //v1
-    if(normalized)
-       vf1 = vf1/lengthVec2(vf1);
+    if(normalized){
+        vf1 = glm::length(vf1)== 0 ? vf1 : glm::normalize(vf1);
+    }
     if(backwards)
         vf1 *= -1;
     auto vf2 = vectorField.interpolate(position + (scalar / 2) * vf1); //v2
-    if(normalized)
-       vf2 = vf2/lengthVec2(vf2);
+    if(normalized){
+        vf2 = glm::length(vf2)== 0 ? vf2 : glm::normalize(vf2);
+    }
     if(backwards)
         vf2 *= -1;
     auto vf3 = vectorField.interpolate(position + (scalar / 2) * vf2); //v3
-    if(normalized)
-       vf3 = vf3/lengthVec2(vf3);
+    if(normalized){
+        vf3 = glm::length(vf3)== 0 ? vf3 : glm::normalize(vf3);
+    }
     if(backwards)
         vf3 *= -1;
     auto vf4 = vectorField.interpolate(position + scalar * vf3); //vf4
-    if(normalized)
-       vf4 = vf4/lengthVec2(vf4);
+    if(normalized){
+        vf4 = glm::length(vf4)== 0 ? vf4 : glm::normalize(vf4);
+    }
     if(backwards)
         vf4 *= -1;
 
@@ -57,7 +61,6 @@ namespace inviwo {
                                               (vf4 * 0.16666666666666666666666666666667));
 
     return next_position;
-
 }
 
 double Integrator::lengthVec2(const dvec2 vec){
