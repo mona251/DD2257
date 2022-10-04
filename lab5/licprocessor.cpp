@@ -30,6 +30,8 @@ LICProcessor::LICProcessor()
     , volumeIn_("volIn")
     , noiseTexIn_("noiseTexIn")
     , licOut_("licOut")
+
+    , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 10, 1, 100, 1)
 // TODO: Register additional properties
 {
     // Register ports
@@ -39,6 +41,8 @@ LICProcessor::LICProcessor()
 
     // Register properties
     // TODO: Register additional properties
+    addProperties(propKernelSize);
+    
 }
 
 void LICProcessor::process() {
@@ -74,17 +78,35 @@ void LICProcessor::process() {
 
     // TODO: Implement LIC and FastLIC
     // This code instead sets all pixels to the same gray value
+    bboxMin = vectorField.getBBoxMin();
+    bboxMax = vectorField.getBBoxMax();
+    pixelSize = dvec2((bboxMax[0] - bboxMin[0]) / (double)texDims_[0],
+                                  (bboxMax[1] - bboxMin[1]) / (double)texDims_[1]);
+    double stepSize = std::min(pixelSize[0], pixelSize[1]);
 
     for (size_t j = 0; j < texDims_.y; j++) {
         for (size_t i = 0; i < texDims_.x; i++) {
-            int val = int(licTexture[i][j]);
-            licImage.setPixel(size2_t(i, j), dvec4(val, val, val, 255));
-            // or
-            licImage.setPixelGrayScale(size2_t(i, j), val);
+            dvec2 position = pixelToPos(size2_t(i, j));
+            std::list<dvec2> streamline =
+                Integrator::Streamline(vectorField, position, stepSize, propKernelSize.get());
+            int gray = 0;
+            for (dvec2 point : streamline) {
+                size2_t pixel = posToPixel(point);
+                gray += texture.readPixelGrayScale(pixel);
+            }
+            gray /= streamline.size();
+            licImage.setPixelGrayScale(size2_t(i, j), gray);
         }
     }
 
     licOut_.setData(outImage);
 }
-
+dvec2 LICProcessor::pixelToPos(size2_t pixel) {
+    return dvec2(bboxMin[0] + ((double)pixel[0] + 0.5) * pixelSize[0],
+                 bboxMin[1] + ((double)pixel[1] + 0.5) * pixelSize[1]);
+}
+size2_t LICProcessor::posToPixel(dvec2 pos) {
+    return size2_t(std::min((int)floor((pos[0] - bboxMin[0]) / pixelSize[0]), (int)texDims_[0] - 1),
+                   std::min((int)floor((pos[1] - bboxMin[1]) / pixelSize[1]), (int)texDims_[1] - 1));
+}
 }  // namespace inviwo

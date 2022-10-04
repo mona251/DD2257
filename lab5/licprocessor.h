@@ -60,6 +60,8 @@ protected:
 
     // (TODO: Helper functions can be defined here and then implemented in the .cpp)
     // e.g. something like a function for standardLIC, fastLIC, autoContrast, ...
+    dvec2 pixelToPos(size2_t pixel);
+    size2_t posToPixel(dvec2 pos);
 
     // Ports
 public:
@@ -77,11 +79,16 @@ public:
     // TODO: Declare properties
     // IntProperty prop1;
     // BoolProperty prop2;
+    IntProperty propKernelSize;
 
     // Attributes
 private:
     size3_t vectorFieldDims_;
     size2_t texDims_;
+
+    dvec2 bboxMin;
+    dvec2 bboxMax;
+    dvec2 pixelSize;
 };
 
 }  // namespace inviwo
