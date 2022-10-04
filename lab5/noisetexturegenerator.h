@@ -59,6 +59,9 @@ public:
     // TODO: Declare additional properties
     // IntProperty properyName;
     // TemplateOptionProperty<int> propertyName2;
+    TemplateOptionProperty<int> propColors;
+    BoolProperty propSeed;
+    IntProperty propSeedNumber;
 
     // Attributes
 private:

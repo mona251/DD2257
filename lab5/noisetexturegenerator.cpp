@@ -29,6 +29,10 @@ NoiseTextureGenerator::NoiseTextureGenerator()
     : Processor()
     , texOut_("texOut")
     , texSize_("texSize", "Texture Size", vec2(512, 512), vec2(1, 1), vec2(2048, 2048), vec2(1, 1))
+
+    , propColors("colors", "Choose Color Scheme for Texture")
+    , propSeed("seed", "Seed the Random Generator", false)
+    , propSeedNumber("seedNum", "Set Seed", 0)
 // TODO: Register additional properties
 {
     // Register ports
@@ -38,6 +42,20 @@ NoiseTextureGenerator::NoiseTextureGenerator()
     addProperty(texSize_);
 
     // TODO: Register additional properties
+    propColors.addOption("bw", "Black and White", 0);
+    propColors.addOption("gray", "Gray Scale", 1);
+    propColors.addOption("color", "RGB", 2);
+    addProperties(propColors, propSeed, propSeedNumber);
+
+    util::hide(propSeedNumber);
+
+    propSeed.onChange([this]() {
+        if (propSeed) {
+            util::show(propSeedNumber);
+        } else {
+            util::hide(propSeedNumber);
+        }
+    });
 }
 
 void NoiseTextureGenerator::process() {
@@ -74,21 +92,32 @@ void NoiseTextureGenerator::process() {
     value = noiseTexture.sampleGrayScale(dvec2(0.5, 0.5));
     LogProcessorInfo("The interpolated color at (0.5,0.5) is " << color << " with grayscale value "
                                                                << value << ".");
+
+    // Create random generator
     std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> distribution(0,255);
+    std::mt19937 gen;
+    if (propSeed.get()) {
+        std::mt19937 gen(propSeedNumber.get());
+    } else {
+        std::mt19937 gen(rd());
+    }
+    std::uniform_int_distribution<int> distr(0, 255);
     for (int j = 0; j < texSize_.get().y; j++) {
         for (int i = 0; i < texSize_.get().x; i++) {
-
-            
-            // TODO: Randomly sample values for the texture, this produces the same gray value for
-            // all pixels
+            // TODO: Randomly sample values for the texture
+            int gray = distr(gen);
+            int red = distr(gen);
+            int green = distr(gen);
+            int blue = distr(gen);
             // A value within the ouput image is set by specifying pixel position and color
-            
-            val = distribution(gen);
-            noiseTexture.setPixelGrayScale(size2_t(i, j), val);
-            // Alternatively, the entire color can be specified
-            // noiseTexture.setPixel(size2_t(i, j), vec4(val, val, val, 255));
+            if (propColors.get() == 2) {
+                noiseTexture.setPixel(size2_t(i, j), vec4(red, green, blue, 255));
+            } else if (propColors.get() == 1) {
+                noiseTexture.setPixelGrayScale(size2_t(i, j), gray);
+            } else {
+                int bw = gray > 127 ? 255 : 0;
+                noiseTexture.setPixelGrayScale(size2_t(i, j), bw);
+            }
         }
     }
 

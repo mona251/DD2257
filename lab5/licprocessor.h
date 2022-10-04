@@ -60,8 +60,10 @@ protected:
 
     // (TODO: Helper functions can be defined here and then implemented in the .cpp)
     // e.g. something like a function for standardLIC, fastLIC, autoContrast, ...
-    std::vector<dvec2>& streamLineLIC(const VectorField2& vectorField, int kernelSize, const dvec2& position, double step, int skipNPoints = 0);
-    void LIC(RGBAImage& licImage, const RGBAImage& texture, const VectorField2& vectorField, int kernelSize, double step, int skipNPoints);
+    dvec2 pixelToPos(size2_t pixel);
+    size2_t posToPixel(dvec2 pos);
+    void LIC(RGBAImage& licImage, const RGBAImage& texture, const VectorField2& vectorField, int kernelSize, double step);
+
     // Ports
 public:
     // Input vector field
@@ -79,13 +81,15 @@ public:
     // IntProperty prop1;
     // BoolProperty prop2;
     IntProperty propKernelSize;
-    IntProperty propSkipNPoints;
-    FloatProperty propStepSize;
 
     // Attributes
 private:
     size3_t vectorFieldDims_;
     size2_t texDims_;
+
+    dvec2 bboxMin;
+    dvec2 bboxMax;
+    dvec2 pixelSize;
 };
 
 }  // namespace inviwo
