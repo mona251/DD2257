@@ -13,6 +13,7 @@
 #include <labstreamlines/integrator.h>
 #include <labstreamlines/streamlineintegrator.h>
 #include <labutils/scalarvectorfield.h>
+#include <random>
 
 namespace inviwo {
 
@@ -33,37 +34,39 @@ StreamlineIntegrator::StreamlineIntegrator()
     , inData("volIn")
     , meshOut("meshOut")
     , meshBBoxOut("meshBBoxOut")
-    , propDisplayPoints("displayPoints", "Display Points", true)
+    , propDisplayPoints("displayPoints", "Display Points", false)
     , propStartPoint("startPoint", "Start Point", vec2(0.5, 0.5), vec2(-1), vec2(1), vec2(0.1))
-    , propSeedMode("seedMode", "Seeds")
-	, propDirection("direction", "Direction")
-    , propLineSeeding("lineSeedingMode", "Multipe line seeding mode")
+    , propSeedMode("seedMode", "Choose Single or Multiple Seeds")
     , propNumStepsTaken("numstepstaken", "Number of actual steps", 0, 0, 100000)
-    , propNumberOfStreamLines("numStreamLines", "Number of Stream lines", 0, 0, 100)
-    , propSeedLinesGridX("numStreamLinesX", "X Dim", 1, 0, 40)
-    , propSeedLinesGridY("numStreamLinesY", "Y Dim", 1, 0, 40)
-	, propStepSize("stepSize", "Step size", 0.1, 0.0, 1.0, 0.001)
-	, propDirectionField("directionField", "Direction Field Integration", false)
-	, propStopCondSteps("stopCondSteps", "Max number of steps", 10, 0, 1000)
-	, propStopCondLength("stopCondLength", "Max length of streamline", 10, 0, 10)
-	, propStopCondVel("stopCondVel", "Stop calculation if velocity is below", 0.0, 0, 2)
     , mouseMoveStart(
           "mouseMoveStart", "Move Start", [this](Event* e) { eventMoveStart(e); },
           MouseButton::Left, MouseState::Press | MouseState::Move)
-// TODO: Initialize additional properties
-// propertyName("propertyIdentifier", "Display Name of the Propery",
-// default value (optional), minimum value (optional), maximum value (optional),
-// increment (optional)); propertyIdentifier cannot have spaces
-{
+    // TODO: Initialize additional properties
+    // propertyName("propertyIdentifier", "Display Name of the Propery",
+    // default value (optional), minimum value (optional), maximum value (optional),
+    // increment (optional)); propertyIdentifier cannot have spaces
+    , propStepSize("stepSize", "Step Size", 0.1, 0.0, 1.0, 0.05)
+    , propDirection("direction", "Integration Direction")
+    , propDirectional("directional", "Use Directional Field", false)
+    , propStopSteps("stopSteps", "Stop at Number of Steps", 100, 0, 100000, 10)
+    , propStopLength("stopLength", "Stop at Streamline Length (Disabled at 0)", 0.0, 0.0, 10.0)
+    , propStopMagnitude("stopMagnitude", "Stop at Magnitude Below (Disabled at 0)", 0.0, 0.0, 10.0)
+    , propColor("streamColor", "Streamline Color", vec4(0.0f, 0.0f, 0.0f, 1.0f), vec4(0.0f),
+                vec4(1.0f), vec4(0.1f), InvalidationLevel::InvalidOutput, PropertySemantics::Color)
+    , propSeedType("seedType", "Choose Seed Type")
+    , propNumSeeds("numSeeds", "Number of Streamlines", 100, 1, 400, 10)
+    , propSampleRes("sampleRes", "Sample Resolution for Magntiude Scalar Field", 100, 10, 200, 10)
+    , propNumSeedsX("numSeedsX", "Number of Seed Points Along the Horizontal Axis", 10, 2, 100, 1)
+    , propNumSeedsY("numSeedsY", "Number of Seed Points Along the Vertical Axis", 10, 2, 100, 1) {
     // Register Ports
     addPort(inData);
     addPort(meshOut);
     addPort(meshBBoxOut);
 
     // Register Properties
-    propSeedMode.addOption("one", "Single Start Point", 0);
-    propSeedMode.addOption("multiple", "Multiple Seeds", 1);
     addProperty(propSeedMode);
+    propSeedMode.addOption("single", "Single Point Seed", 0);
+    propSeedMode.addOption("multiple", "Multiple Seeds", 1);
     addProperty(propStartPoint);
     addProperty(propDisplayPoints);
     addProperty(propNumStepsTaken);
@@ -73,71 +76,45 @@ StreamlineIntegrator::StreamlineIntegrator()
 
     // TODO: Register additional properties
     // addProperty(propertyName);
-	addProperty(propDirection);
+
     propDirection.addOption("forward", "Forward", 0);
     propDirection.addOption("backward", "Backward", 1);
-	propDirection.addOption("backward", "Both", 2);
-	
-    addProperty(propLineSeeding);
-    propLineSeeding.addOption("random", "Random", 0);
-    propLineSeeding.addOption("uniform", "Uniform", 1);
-	propLineSeeding.addOption("magnitude", "Magnitude", 2);
-    
-    addProperty(propSeedLinesGridX);
-    addProperty(propSeedLinesGridY);
-    
-    addProperty(propNumberOfStreamLines);
-	addProperty(propStepSize);
-	addProperty(propDirectionField);
-	
-	addProperty(propStopCondSteps);
-	addProperty(propStopCondLength);
-	addProperty(propStopCondVel);
 
-	
+    propSeedType.addOption("random", "Uniformly Random", 0);
+    propSeedType.addOption("uniform", "Uniform Grid", 1);
+    propSeedType.addOption("wRandom", "Magnitude Weighted Random", 2);
+    
+    addProperties(propSeedType, propNumSeeds, propSampleRes, propNumSeedsX, propNumSeedsY, propStepSize, propDirection, propDirectional, propStopSteps, propStopLength,
+                  propStopMagnitude, propColor);
 
     // Show properties for a single seed and hide properties for multiple seeds
     // (TODO)
-    util::hide(propNumberOfStreamLines, propLineSeeding, propSeedLinesGridX, propSeedLinesGridY);
-    util::hide(propStartPoint, mouseMoveStart, propNumStepsTaken);
-    
+    util::hide(propSeedType ,propNumSeeds, propSampleRes, propNumSeedsX, propNumSeedsY);
     propSeedMode.onChange([this]() {
         if (propSeedMode.get() == 0) {
             util::show(propStartPoint, mouseMoveStart, propNumStepsTaken);
-            util::hide(propNumberOfStreamLines, propLineSeeding, propSeedLinesGridX, propSeedLinesGridY);
+            util::hide(propSeedType, propNumSeeds, propSampleRes, propNumSeedsX, propNumSeedsY);
         } else {
+            util::show(propSeedType);
             util::hide(propStartPoint, mouseMoveStart, propNumStepsTaken);
-            util::show(propLineSeeding);
-            if(propLineSeeding.get() == 0){
-                util::hide(propSeedLinesGridX, propSeedLinesGridY);
-                util::show(propNumberOfStreamLines);
-            }
-            else if(propLineSeeding.get() == 1){
-                util::show(propSeedLinesGridX, propSeedLinesGridY);
-                util::hide(propNumberOfStreamLines);
-            }
-            else{
-                util::show(propSeedLinesGridX, propSeedLinesGridY);
-                util::hide(propNumberOfStreamLines);
+            if (propSeedType.get() == 1) {
+                util::show(propNumSeedsX, propNumSeedsY);
+                util::hide(propNumSeeds, propSampleRes);
+            } else {
+                util::show(propNumSeeds, propSampleRes);
+                util::hide(propNumSeedsX, propNumSeedsY);
             }
         }
-    });
-    propLineSeeding.onChange([this]() {
-        if(propSeedMode.get() != 0){
-            if(propLineSeeding.get() == 0){
-                util::hide(propSeedLinesGridX, propSeedLinesGridY);
-                util::show(propNumberOfStreamLines);
-            }
-            else if(propLineSeeding.get() == 1){
-                util::show(propSeedLinesGridX, propSeedLinesGridY);
-                util::hide(propNumberOfStreamLines);
-            }
-            else{
-                util::show(propSeedLinesGridX, propSeedLinesGridY);
-                util::hide(propNumberOfStreamLines);
-            }
+    }
+    );
+    propSeedType.onChange([this]() {
+        if (propSeedType.get() == 1) {
+            util::show(propNumSeedsX, propNumSeedsY);
+            util::hide(propNumSeeds);
+        } else {
+            util::show(propNumSeeds);
+            util::hide(propNumSeedsX, propNumSeedsY);
         }
-
     });
 }
 
@@ -154,75 +131,6 @@ void StreamlineIntegrator::eventMoveStart(Event* event) {
     // Update starting point
     propStartPoint.set(mousePos);
     event->markAsUsed();
-}
-
-int StreamlineIntegrator::DrawStreamLine(const vec2& startPoint, const VectorField2& vectorField,
-                        const float stepSize, const int direction, const bool directionField,
-                        const int nSteps, const float maxArcLength, const float minSpeed, const bool displayPoints,
-                        std::shared_ptr<BasicMesh>& mesh, std::vector<BasicMesh::Vertex>& vertices){
-    vec2 nextPoint = startPoint;
-    vec2 previousPoint = startPoint;
-    
-    vec2 BBoxMin = vectorField.getBBoxMin();
-    vec2 BBoxMax = vectorField.getBBoxMax();
-    
-    auto indexBufferPoints = mesh->addIndexBuffer(DrawType::Points, ConnectivityType::None);
-    if (displayPoints != 0){
-        Integrator::drawPoint(startPoint, vec4(0, 0, 0, 1), indexBufferPoints.get(), vertices);
-	}
-    auto indexBufferLine = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::None);
-    
-    int stepsTaken = 0;
-    double arcLength = 0;
-    bool stop_next = false;
-    
-    for (int i = 1; i < nSteps + 1; i++) {
-        if(direction == 0)
-            nextPoint = Integrator::RK4(vectorField, nextPoint, stepSize, false, directionField);
-        else
-            nextPoint = Integrator::RK4(vectorField, nextPoint, stepSize, true, directionField);
-        
-        if(stop_next){
-            break;
-        }
-        if(nextPoint[0] < BBoxMin[0] || nextPoint[0] > BBoxMax[0] || nextPoint[1] < BBoxMin[1] || nextPoint[1] > BBoxMax[1]){
-            nextPoint = vec2(std::clamp(nextPoint[0], BBoxMin[0], BBoxMax[0]), std::clamp(nextPoint[1], BBoxMin[1], BBoxMax[1]));
-            stop_next = true;
-        }
-        
-        arcLength += lengthVec2(previousPoint - nextPoint);
-        
-        if(arcLength >= maxArcLength){
-            break;
-        }
-        
-        if(lengthVec2(vectorField.interpolate(previousPoint)) < minSpeed){
-            break;
-        }
-        /* ALT Method
-        if(lengthVec2(previousPoint - nextPoint) < minSpeed){
-            break;
-        }
-        */
-        if(lengthVec2(vectorField.interpolate(previousPoint)) == 0){
-            break;
-        }
-        Integrator::drawLineSegment(nextPoint, previousPoint, vec4(0, 0, 0, 1),
-                                    indexBufferLine.get(), vertices);
-        if (displayPoints != 0)
-            Integrator::drawPoint(nextPoint, vec4(0, 0, 0, 1), indexBufferPoints.get(), vertices);
-        stepsTaken++;
-        previousPoint = nextPoint;
-    }
-    return stepsTaken;
-}
-
-double StreamlineIntegrator::lengthVec2(const vec2 vec){
-    return pow(vec[0]*vec[0] + vec[1]*vec[1],0.5);
-}
-
-float StreamlineIntegrator::randomValue(const float min, const float max) const {
-    return min + uniformReal(randGenerator) * (max - min);
 }
 
 void StreamlineIntegrator::process() {
@@ -259,82 +167,169 @@ void StreamlineIntegrator::process() {
 
     auto mesh = std::make_shared<BasicMesh>();
     std::vector<BasicMesh::Vertex> vertices;
-    int stepsTaken = 0;
 
-    if (propSeedMode.get() == 0) {
+    auto indexBufferPoints = mesh->addIndexBuffer(DrawType::Points, ConnectivityType::None);
+    auto indexBufferLines = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::None);
+
+    if (propSeedMode.get() == 0) { // Single streamline
+        auto indexBufferPoints = mesh->addIndexBuffer(DrawType::Points, ConnectivityType::None);
         vec2 startPoint = propStartPoint.get();
         // Draw start point
-        if((int)propDirection.get() == 2){
-            stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 0, propDirectionField.get(),
-                        propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                        vertices);
-            stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 1, propDirectionField.get(),
-                        propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                        vertices);
-        }
-        else{
-            stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), propDirection.get(), propDirectionField.get(),
-                        propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                        vertices);
-        }
-        propNumStepsTaken.set(stepsTaken);
+        if (propDisplayPoints.get() != 0)
+            Integrator::drawPoint(startPoint, vec4(0, 0, 0, 1), indexBufferPoints.get(), vertices);
+
+        // TODO: Create one stream line from the given start point
+
+        // TODO: Use the propNumStepsTaken property to show how many steps have actually been
+        // integrated This could be different from the desired number of steps due to stopping
+        // conditions (too slow, boundary, ...)
+        int steps = Streamline(startPoint, vectorField, mesh, vertices, indexBufferPoints, indexBufferLines);
+        propNumStepsTaken.set(steps);
 
     } else {
         // TODO: Seed multiple stream lines either randomly or using a uniform grid
         // (TODO: Bonus, sample randomly according to magnitude of the vector field)
-        if(propLineSeeding.get() == 0){
-            for(int i = 0; i<propNumberOfStreamLines; i++){
-                float x = randomValue(BBoxMin_[0], BBoxMax_[0]);
-                float y = randomValue(BBoxMin_[1], BBoxMax_[1]);
-                vec2 startPoint = vec2(x,y);
-                if((int)propDirection.get() == 2){
-                    stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 0, propDirectionField.get(),
-                                propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                vertices);
-                    stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 1, propDirectionField.get(),
-                                propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                vertices);
-                }
-                else{
-                    stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), propDirection.get(), propDirectionField.get(),
-                                propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                vertices);
-                }
-            }
-        }
-        else if(propLineSeeding.get() == 1){
-            for(int i = 0; i<propSeedLinesGridX; i++){
-                for(int j = 0; j<propSeedLinesGridY; j++){
-                    
-                    double temp = propSeedLinesGridX != 1 ? (double)i/((double)propSeedLinesGridX - 1) : (BBoxMin_[0] + BBoxMax_[0])/2.0;
-                    double xpos = (1 - temp) * BBoxMin_[0] + temp * BBoxMax_[0];
-                    temp =  propSeedLinesGridY != 1 ? (double)j/((double)propSeedLinesGridY - 1) : (BBoxMin_[1] + BBoxMax_[1])/2.0;
-                    double ypos = (1 - temp) * BBoxMin_[1] + temp * BBoxMax_[1];
-                    vec2 startPoint = vec2(xpos, ypos);
-                    
-                    if((int)propDirection.get() == 2){
-                        stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 0, propDirectionField.get(),
-                                    propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                    vertices);
-                        stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), 1, propDirectionField.get(),
-                                    propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                    vertices);
-                    }
-                    else{
-                        stepsTaken += DrawStreamLine(startPoint, vectorField, propStepSize.get(), propDirection.get(), propDirectionField.get(),
-                                    propStopCondSteps.get(), propStopCondLength.get(), propStopCondVel.get(), propDisplayPoints.get(), mesh,
-                                    vertices);
-                    }
+        // Create a list of magnitudes and corresponding points for random distributions
+
+        // Random sampling
+        if (propSeedType.get() != 1) {
+            // Random generator
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            int sampleRes = propSampleRes.get();
+            dvec2 resolution = dvec2((BBoxMax_[0] - BBoxMin_[0]) / (double)(sampleRes),
+                                     (BBoxMax_[1] - BBoxMin_[1]) / (double)(sampleRes));
+
+            std::vector<double> magnitudeDistr; // Will contain non decreasing values from 0 to 1 corresponding to the sample points, can be viewved as a CDF
+            std::vector<dvec2> points; // Contains the position of each sample point
+            double sumMagnitudes = 0; // Total sum of all magnitudes
+            int numSamples = 0; // Number of samples
+            // Sample magnitude evenly across the volume according to resolution
+            for (double x = BBoxMin_[0]; x <= BBoxMax_[0]; x += resolution[0]) {
+                for (double y = BBoxMin_[1]; y <= BBoxMax_[1]; y += resolution[1]) {
+                    numSamples++;
+                    double magnitude = glm::length(vectorField.interpolate(dvec2(x, y)));
+                    sumMagnitudes += magnitude;
+                    magnitudeDistr.push_back(sumMagnitudes); // Non decreasing values of total magSums
+                    points.push_back(dvec2(x, y)); // Corresponding points in vol
                 }
             }
-        }
-        else if(propLineSeeding.get() == 2){
-            
+            // Uniformly Random
+            if (propSeedType.get() == 0) {
+                std::uniform_int_distribution<> distribution(0, numSamples - 1); // Uniform distribution accross all samples
+                for (int n = 0; n < propNumSeeds.get(); n++) { // numSeeds determine number of streamlines
+                    int seed = distribution(gen);
+                    dvec2 startPoint = points[seed];
+                    if (propDisplayPoints.get() != 0)
+                        Integrator::drawPoint(startPoint, propColor.get(), indexBufferPoints.get(),
+                                              vertices);
+                    Streamline(startPoint, vectorField, mesh, vertices, indexBufferPoints,
+                               indexBufferLines);
+                }
+            }
+            // Magnitude Weighted Random
+            else if (propSeedType.get() == 2) {
+                // Normalize magnitudeDistr so we get a distribution from 0 to 1
+                for (int i = 0; i < numSamples; i++) {
+                    magnitudeDistr[i] /= sumMagnitudes;
+                }
+                std::uniform_real_distribution<> distribution(0.0, 1.0); //Uniform distr. from 0 to 1
+                dvec2 startPoint = points[numSamples - 1];
+                for (int n = 0; n < propNumSeeds.get(); n++) {
+                    double seed = distribution(gen);
+                    for (int i = 0; i < numSamples; i++) {
+                        if (magnitudeDistr[i] > seed) { // Higher magnitude entries in magnitudeDistr will cover a larger span and therefore be more likely
+                            startPoint = points[i];
+                            break;
+                        }
+                    }
+                    if (propDisplayPoints.get() != 0)
+                        Integrator::drawPoint(startPoint, propColor.get(), indexBufferPoints.get(),
+                                              vertices);
+                    Streamline(startPoint, vectorField, mesh, vertices, indexBufferPoints,
+                               indexBufferLines);
+                }
+            }
+        // Uniform grid distribution
+        } else {
+            dvec2 resolution = dvec2((BBoxMax_[0] - BBoxMin_[0]) / (double)(propNumSeedsX.get() - 1),
+                                     (BBoxMax_[1] - BBoxMin_[1]) / (double)(propNumSeedsY.get() - 1));
+            // Uniform grid with nx * ny sample points
+            for (double x = BBoxMin_[0]; x <= BBoxMax_[0]; x += resolution[0]) {
+                for (double y = BBoxMin_[1]; y <= BBoxMax_[1]; y += resolution[1]) {
+                    dvec2 startPoint = dvec2(x, y);
+                    if (propDisplayPoints.get() != 0)
+                        Integrator::drawPoint(startPoint, propColor.get(), indexBufferPoints.get(),
+                                              vertices);
+                    Streamline(startPoint, vectorField, mesh, vertices, indexBufferPoints,
+                               indexBufferLines);
+                }
+            }
         }
     }
 
     mesh->addVertices(vertices);
     meshOut.setData(mesh);
 }
+int StreamlineIntegrator::Streamline(const dvec2& startPoint, const VectorField2& vectorField,
+                                     std::shared_ptr<BasicMesh>& mesh,
+                                     std::vector<BasicMesh::Vertex>& vertices,
+                                     std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferPoints,
+                                     std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferLines) {
+    double step = propStepSize.get(); // Step size
+    bool backwards = propDirection.get() == 1 ? true : false; // Forwards or backwards
+    int stopSteps = propStopSteps.get(); // Stop after n steps
+    double stopLength = propStopLength.get(); // Stop after arc length
+    double stopMagnitude = propStopMagnitude.get(); // Stop at low magnitude
 
+    dvec2 prevPoint = startPoint;
+    dvec2 point = startPoint;
+
+    int steps = 0;
+    double arcLength = 0;
+    bool outOfBounds = false;
+
+    while (true) {
+        point = Integrator::RK4(vectorField, prevPoint, step, backwards, propDirectional.get());
+        if (!vectorField.isInside(point)) { // If out of bounds, interpolate point inbounds and stop
+            point = vectorField.clampPositionToBBox(point);
+            outOfBounds = true;
+        }
+        // Stop if moving along bbox
+        if ((prevPoint[0] == BBoxMin_[0] && point[0] == BBoxMin_[0]) ||
+            (prevPoint[0] == BBoxMax_[0] && point[0] == BBoxMax_[0]) ||
+            (prevPoint[1] == BBoxMin_[1] && point[1] == BBoxMin_[1]) ||
+            (prevPoint[1] == BBoxMax_[1] && point[1] == BBoxMax_[1]))
+            break;
+        if (propDisplayPoints.get()) {
+            Integrator::drawPoint(point, propColor.get(), indexBufferPoints.get(),
+                                  vertices);
+        }
+        Integrator::drawLineSegment(prevPoint, point, propColor.get(),
+                                    indexBufferLines.get(), vertices);
+
+        steps++;
+        arcLength += glm::length(point - prevPoint);
+        double magnitude = glm::length(vectorField.interpolate(prevPoint));
+
+        if (steps >= stopSteps) { // Stop due to steps
+            break;
+        }
+        if (stopLength > 0 && arcLength > stopLength) { // Stop due to arclength
+            break;
+        }
+        if (stopMagnitude > 0 && magnitude < stopMagnitude) { // Stop due to low mag
+            break;
+        }
+        if (magnitude < 0.001) { // Stop if mag is sufficiently close to 0
+            break;
+        }
+        if (outOfBounds) { // Stop if out of bounds
+            break;
+        }
+
+        prevPoint = point;
+    }
+    return steps;
+}
 }  // namespace inviwo

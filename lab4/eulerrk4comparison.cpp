@@ -36,16 +36,20 @@ EulerRK4Comparison::EulerRK4Comparison()
     , mouseMoveStart(
           "mouseMoveStart", "Move Start", [this](Event* e) { eventMoveStart(e); },
           MouseButton::Left, MouseState::Press | MouseState::Move)
-    , stepSizeEuler("stepSizeEuler", "Step size for Euler")
-    , integrationStepsEuler("integrationStepsEuler", "integration steps for Euler", 0, 0, 100, 1)
-    , stepSizeRK4("stepSizeRK4", "Step size for RK4")
-    , integrationStepsRK4("integrationStepsRK4", "integration steps for RK4", 0, 0, 100, 1)
-
-// TODO: Initialize additional properties
-// propertyName("propertyIdentifier", "Display Name of the Propery",
-// default value (optional), minimum value (optional), maximum value (optional), increment
-// (optional)); propertyIdentifier cannot have spaces
-{
+    // TODO: Initialize additional properties
+    // propertyName("propertyIdentifier", "Display Name of the Propery",
+    // default value (optional), minimum value (optional), maximum value (optional), increment
+    // (optional)); propertyIdentifier cannot have spaces
+    , propEulerSteps("eulerSteps", "Number of Steps for Euler", 11, 1, 100, 5)
+    , propEulerStep("eulerStep", "Step Size for Euler", 1.0)
+    , propEulerColor("eulerColor", "Color for Euler", vec4(1.0f, 0.0f, 0.0f, 1.0f), vec4(0.0f),
+                     vec4(1.0f), vec4(0.1f), InvalidationLevel::InvalidOutput,
+                     PropertySemantics::Color)
+    , propRK4Steps("rk4Steps", "Number of Steps for Fourth Order Runge Kutta", 11, 1, 100, 5)
+    , propRK4Step("rk4Step", "Step Size for Runge Kutta", 1.0)
+    , propRK4Color("rk4Color", "Color for Runge Kutta", vec4(0.0f, 0.0f, 1.0f, 1.0f), vec4(0.0f),
+                     vec4(1.0f), vec4(0.1f), InvalidationLevel::InvalidOutput,
+                     PropertySemantics::Color) {
     // Register Ports
     addPort(meshOut);
     addPort(meshBBoxOut);
@@ -54,12 +58,9 @@ EulerRK4Comparison::EulerRK4Comparison()
     // Register Properties
     addProperty(propStartPoint);
     addProperty(mouseMoveStart);
-
     // TODO: Register additional properties
-    addProperty(stepSizeEuler);
-    addProperty(integrationStepsEuler);
-    addProperty(stepSizeRK4);
-    addProperty(integrationStepsRK4);
+    // addProperty(propertyName);
+    addProperties(propEulerSteps, propEulerStep, propEulerColor, propRK4Steps, propRK4Step, propRK4Color);
 
 }
 
@@ -98,9 +99,9 @@ void EulerRK4Comparison::process() {
     auto mesh = std::make_shared<BasicMesh>();
     std::vector<BasicMesh::Vertex> vertices;
 
+    auto indexBufferEuler = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::Strip);
+    auto indexBufferRK = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::Strip);
     auto indexBufferPoints = mesh->addIndexBuffer(DrawType::Points, ConnectivityType::None);
-    auto indexBufferLine = mesh->addIndexBuffer(DrawType::Lines, ConnectivityType::None);
-
 
     auto bboxMesh = std::make_shared<BasicMesh>();
     std::vector<BasicMesh::Vertex> bboxVertices;
@@ -124,55 +125,40 @@ void EulerRK4Comparison::process() {
 
     // Draw start point
     dvec2 startPoint = propStartPoint.get();
-    //Integrator::drawPoint(startPoint, black, indexBufferPoints.get(), vertices);
+    Integrator::drawPoint(startPoint, black, indexBufferPoints.get(), vertices);
 
     // TODO: Implement the Euler and Runge-Kutta of 4th order integration schemes
     // and then integrate forward for a specified number of integration steps and a given stepsize
     // (these should be additional properties of the processor)
 
-    auto nextPointEuler = startPoint;
-    float scalarvalueEuler = stepSizeEuler.get();
-    int integratestepsEuler = integrationStepsEuler.get();
-    vec4 red = vec4(1, 0, 0, 1);
-
-    std::vector<vec2> eulerPoints;
-    eulerPoints.push_back(nextPointEuler);
-    
-    Integrator::drawPoint(nextPointEuler, red, indexBufferPoints.get(), vertices);
-
-    
-    for (int i = 1; i < integratestepsEuler + 1; i++) {
-        nextPointEuler = Integrator::Euler(vectorField, nextPointEuler, scalarvalueEuler);
-        Integrator::drawLineSegment(vec2(eulerPoints[0][0], eulerPoints[0][1]),
-                                    vec2(nextPointEuler[0], nextPointEuler[1]), red,
-                                    indexBufferLine.get(), vertices);
-        Integrator::drawPoint(nextPointEuler, red, indexBufferPoints.get(), vertices);
-        
-        eulerPoints.pop_back();
-        eulerPoints.push_back(nextPointEuler);
+    // Integrator::Euler(vectorField, startPoint, ...);
+    // Integrator::Rk4(vectorField, dims, startPoint, ...);
+    // Euler integration
+    dvec2 prevEulerPoint = startPoint;
+    dvec2 eulerPoint = startPoint;
+    int eulerSteps = propEulerSteps.get();
+    double eulerStep = propEulerStep.get();
+    for (int n = 0; n < eulerSteps; n++) {
+        eulerPoint = Integrator::Euler(vectorField, prevEulerPoint, eulerStep); // Calc next point
+        Integrator::drawLineSegment(prevEulerPoint, eulerPoint, propEulerColor.get(),
+                                    indexBufferEuler.get(), vertices);
+        Integrator::drawPoint(eulerPoint, propEulerColor.get(), indexBufferPoints.get(),
+                                            vertices);
+        prevEulerPoint = eulerPoint;
     }
-
-    auto nextPointRK4 = startPoint;
-    float scalarvalueRK4 = stepSizeRK4.get();
-    int integratestepsRK4 = integrationStepsRK4.get();
-    vec4 blue = vec4(0, 0, 1, 1);
-    
-    std::vector<vec2> RK4Points;
-    RK4Points.push_back(nextPointRK4);
-    
-    Integrator::drawPoint(nextPointRK4, blue, indexBufferPoints.get(), vertices);
-
-
-    for (int i = 1; i < integratestepsRK4 + 1; i++) {
-        nextPointRK4 = Integrator::RK4(vectorField, nextPointRK4, scalarvalueRK4);
-        Integrator::drawLineSegment(vec2(RK4Points[0][0], RK4Points[0][1]),
-                                    vec2(nextPointRK4[0], nextPointRK4[1]), blue,
-                                    indexBufferLine.get(), vertices);
-        Integrator::drawPoint(nextPointRK4, blue, indexBufferPoints.get(), vertices);
-        RK4Points.pop_back();
-        RK4Points.push_back(nextPointRK4);
+    // Fourth Order Runge Kutnt integration
+    dvec2 prevRK4Point = startPoint;
+    dvec2 rk4Point = startPoint;
+    int rk4Steps = propRK4Steps.get();
+    double rk4Step = propRK4Step.get();
+    for (int n = 0; n < rk4Steps; n++) {
+        rk4Point = Integrator::RK4(vectorField, prevRK4Point, rk4Step); // Calc next point
+        Integrator::drawLineSegment(prevRK4Point, rk4Point, propRK4Color.get(),
+                                    indexBufferRK.get(), vertices);
+        Integrator::drawPoint(rk4Point, propRK4Color.get(), indexBufferPoints.get(),
+                                            vertices);
+        prevRK4Point = rk4Point;
     }
-
 
 
     mesh->addVertices(vertices);

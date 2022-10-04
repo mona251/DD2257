@@ -77,16 +77,21 @@ public:
 
     // Properties
 public:
-    FloatVec2Property propStartPoint;
+    DoubleVec2Property propStartPoint;
 
     EventProperty mouseMoveStart;
 
     // TODO: Declare additional properties
-    IntProperty integrationStepsEuler;
-    FloatProperty stepSizeEuler;
+    // IntProperty properyName;
+    // FloatProperty propertyName2;
 
-    IntProperty integrationStepsRK4;
-    FloatProperty stepSizeRK4;
+    IntProperty propEulerSteps;
+    DoubleProperty propEulerStep;
+    FloatVec4Property propEulerColor;
+
+    IntProperty propRK4Steps;
+    DoubleProperty propRK4Step;
+    FloatVec4Property propRK4Color;
 
 // Attributes
 private:
