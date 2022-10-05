@@ -39,40 +39,71 @@ dvec2 Integrator::RK4(const VectorField2& vectorField, const dvec2& position, do
     return position + step * (v1 / 6.0 + v2 / 3.0 + v3 / 3.0 + v4 / 6.0);
 }
 
-std::list<dvec2> Integrator::Streamline(const VectorField2& vectorField, const dvec2& position,
-    double step, int steps) {
-    std::list<dvec2> streamline = std::list<dvec2>{position};
-    bool forward = true;
-    bool backward = true;
-
+std::vector<dvec2> Integrator::Streamline(const VectorField2& vectorField, const dvec2& position,
+    double step, int steps){
+    
+    std::vector<dvec2> streamline;
+    dvec2 startPos = position;
+    dvec2 currentPos = position;
+    dvec2 prevPos = position;
+    bool halt = false;
+    
+    //Backward pass
     for (int s = 0; s < steps; s++) {
-        if (forward) {
-            dvec2 point = RK4(vectorField, streamline.back(), step, false, true);
-            if (!vectorField.isInside(point)) { // Stop if out of bounds
-                point = vectorField.clampPositionToBBox(point);
-                forward = false;
-            }
-            if (glm::length(streamline.back()) < 0.000001) {  // Stop if low magnitude
-                forward = false;
-            } else {
-                streamline.push_back(point);
-            }
+        currentPos = RK4(vectorField, prevPos, step, true, true);
+        
+        if (!vectorField.isInside(currentPos)) {
+            currentPos = vectorField.clampPositionToBBox(currentPos);
+            halt = true;
         }
-        if (backward) {
-            dvec2 point = RK4(vectorField, streamline.front(), step, true, true);
-            if (!vectorField.isInside(point)) {  // Stop if out of bounds
-                point = vectorField.clampPositionToBBox(point);
-                backward = false;
-            }
-            if (glm::length(streamline.front()) < 0.000001) {  // Stop if low magnitude
-                backward = false;
-            } else {
-                streamline.push_front(point);
-            }
+        if (glm::length(vectorField.interpolate(currentPos)) < 0.000001) {
+            halt = true;
         }
-        if (!forward && !backward) {
+        if(glm::length(prevPos-currentPos) < 0.5*step){
+            halt = true;
+        }
+        if(halt){
             break;
         }
+        else {
+            streamline.push_back(currentPos);
+        }
+        prevPos = currentPos;
+    }
+    //Reverses the elements so they are in the correct order
+    if(streamline.size() >= 2){
+        std::reverse(streamline.begin(), streamline.end());
+    }
+    //Add middle element and prepare forward
+    streamline.push_back(startPos);
+    currentPos = startPos;
+    prevPos = startPos;
+    halt = false;
+    //Forward pass
+    for (int s = 0; s < steps; s++) {
+        currentPos = RK4(vectorField, prevPos, step, false, true);
+        
+        if (!vectorField.isInside(currentPos)) {
+            currentPos = vectorField.clampPositionToBBox(currentPos);
+            halt = true;
+        }
+        if (glm::length(vectorField.interpolate(currentPos)) < 0.000001) {
+            halt = true;
+        }
+        if(glm::length(prevPos-currentPos) < 0.5*step){
+            //Wow there's this really cool feature where you can bounce over some 
+            //extremities and essentially never reach the other stop conditions when 
+            //integrating over the directional field I sure do love hunting for bugs :)
+            //This can still happen but is much less likely now
+            halt = true;
+        }
+        if(halt){
+            break;
+        }
+        else {
+            streamline.push_back(currentPos);
+        }
+        prevPos = currentPos;
     }
     return streamline;
 }
