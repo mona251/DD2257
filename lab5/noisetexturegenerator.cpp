@@ -92,11 +92,12 @@ void NoiseTextureGenerator::process() {
     LogProcessorInfo("The interpolated color at (0.5,0.5) is " << color << " with grayscale value "
                                                                << value << ".");
 
-    // Create random generator
+    // Create random generators
     std::random_device rd;
     std::mt19937 randGen(rd());
     std::mt19937 seedGen(propSeedNumber.get());
     std::uniform_int_distribution<int> distr(0, 255);
+    // Generate random values for each pixel
     for (int j = 0; j < texSize_.get().y; j++) {
         for (int i = 0; i < texSize_.get().x; i++) {
             // TODO: Randomly sample values for the texture

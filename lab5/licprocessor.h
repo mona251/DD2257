@@ -20,6 +20,7 @@
 #include <lablic/lablicmoduledefine.h>
 #include <labutils/scalarvectorfield.h>
 #include <labutils/rgbaimage.h>
+#include <inviwo/core/properties/transferfunctionproperty.h>
 
 namespace inviwo {
 
@@ -63,7 +64,9 @@ protected:
     void LIC(double stepSize, const VectorField2& vectorField,
              const RGBAImage& texture, RGBAImage& licImage);
     void fastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage);
-    void enhance(double targetMean, double targetSD, RGBAImage& licImage);
+    void enhanceLIC(double targetMean, double targetSD, RGBAImage& licImage);
+    void colorLIC(const VectorField2& vectorField, RGBAImage& licImage);
+    dvec2 getMinMax(const VectorField2& vectorField);
     dvec2 pixelToPos(size2_t pixel);
     size2_t posToPixel(dvec2 pos);
 
@@ -88,6 +91,9 @@ public:
     BoolProperty propEnhance;
     DoubleProperty propMean;
     DoubleProperty propSD;
+    BoolProperty propPaint;
+    TransferFunctionProperty propColor;
+    DoubleProperty propColorFraction;
 
     // Attributes
 private:
