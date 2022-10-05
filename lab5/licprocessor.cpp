@@ -32,6 +32,7 @@ LICProcessor::LICProcessor()
     , licOut_("licOut")
 
     , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 10, 1, 100, 1)
+    , propFastLIC("fastLIC", "Use Fast LIC", true)
 // TODO: Register additional properties
 {
     // Register ports
@@ -41,7 +42,7 @@ LICProcessor::LICProcessor()
 
     // Register properties
     // TODO: Register additional properties
-    addProperties(propKernelSize);
+    addProperties(propFastLIC, propKernelSize);
     
 }
 
@@ -84,6 +85,16 @@ void LICProcessor::process() {
                                   (bboxMax[1] - bboxMin[1]) / (double)texDims_[1]);
     double stepSize = std::min(pixelSize[0], pixelSize[1]);
 
+    if (propFastLIC.get()) {
+        FastLIC(stepSize, visited, vectorField, texture, licImage);
+    } else {
+        LIC(stepSize, vectorField, texture, licImage);
+    }
+
+    licOut_.setData(outImage);
+}
+void LICProcessor::LIC(double stepSize, const VectorField2& vectorField,
+                       const RGBAImage& texture, RGBAImage& licImage) {
     for (size_t j = 0; j < texDims_.y; j++) {
         for (size_t i = 0; i < texDims_.x; i++) {
             dvec2 position = pixelToPos(size2_t(i, j));
@@ -98,9 +109,31 @@ void LICProcessor::process() {
             licImage.setPixelGrayScale(size2_t(i, j), gray);
         }
     }
-
-    licOut_.setData(outImage);
 }
+void LICProcessor::FastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage) {
+    for (size_t j = 0; j < texDims_.y; j++) {
+        for (size_t i = 0; i < texDims_.x; i++) {
+            if (visited[i][j] != 0) {
+                continue;
+            }
+            dvec2 position = pixelToPos(size2_t(i, j));
+            std::list<dvec2> streamline =
+                Integrator::Streamline(vectorField, position, stepSize, propKernelSize.get());
+            int gray = 0;
+            for (dvec2 point : streamline) {
+                size2_t pixel = posToPixel(point);
+                gray += texture.readPixelGrayScale(pixel);
+            }
+            gray /= streamline.size();
+            for (dvec2 point : streamline) {
+                size2_t pixel = posToPixel(point);
+                licImage.setPixelGrayScale(pixel, gray);
+                visited[pixel[0]][pixel[1]] = 1;
+            }
+        }
+    }
+}
+
 dvec2 LICProcessor::pixelToPos(size2_t pixel) {
     return dvec2(bboxMin[0] + ((double)pixel[0] + 0.5) * pixelSize[0],
                  bboxMin[1] + ((double)pixel[1] + 0.5) * pixelSize[1]);

@@ -32,7 +32,7 @@ NoiseTextureGenerator::NoiseTextureGenerator()
 
     , propColors("colors", "Choose Color Scheme for Texture")
     , propSeed("seed", "Seed the Random Generator", false)
-    , propSeedNumber("seedNum", "Set Seed", 0)
+    , propSeedNumber("seedNum", "Set Seed", 0, 0, 10000, 1)
 // TODO: Register additional properties
 {
     // Register ports
@@ -44,7 +44,6 @@ NoiseTextureGenerator::NoiseTextureGenerator()
     // TODO: Register additional properties
     propColors.addOption("bw", "Black and White", 0);
     propColors.addOption("gray", "Gray Scale", 1);
-    propColors.addOption("color", "RGB", 2);
     addProperties(propColors, propSeed, propSeedNumber);
 
     util::hide(propSeedNumber);
@@ -95,24 +94,15 @@ void NoiseTextureGenerator::process() {
 
     // Create random generator
     std::random_device rd;
-    std::mt19937 gen;
-    if (propSeed.get()) {
-        std::mt19937 gen(propSeedNumber.get());
-    } else {
-        std::mt19937 gen(rd());
-    }
+    std::mt19937 randGen(rd());
+    std::mt19937 seedGen(propSeedNumber.get());
     std::uniform_int_distribution<int> distr(0, 255);
     for (int j = 0; j < texSize_.get().y; j++) {
         for (int i = 0; i < texSize_.get().x; i++) {
             // TODO: Randomly sample values for the texture
-            int gray = distr(gen);
-            int red = distr(gen);
-            int green = distr(gen);
-            int blue = distr(gen);
+            int gray = propSeed.get() ? distr(seedGen) : distr(randGen);
             // A value within the ouput image is set by specifying pixel position and color
-            if (propColors.get() == 2) {
-                noiseTexture.setPixel(size2_t(i, j), vec4(red, green, blue, 255));
-            } else if (propColors.get() == 1) {
+            if (propColors.get() == 1) {
                 noiseTexture.setPixelGrayScale(size2_t(i, j), gray);
             } else {
                 int bw = gray > 127 ? 255 : 0;
