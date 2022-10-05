@@ -62,7 +62,8 @@ protected:
     // e.g. something like a function for standardLIC, fastLIC, autoContrast, ...
     void LIC(double stepSize, const VectorField2& vectorField,
              const RGBAImage& texture, RGBAImage& licImage);
-    void FastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage);
+    void fastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage);
+    void enhance(double targetMean, double targetSD, RGBAImage& licImage);
     dvec2 pixelToPos(size2_t pixel);
     size2_t posToPixel(dvec2 pos);
 
@@ -84,6 +85,9 @@ public:
     // BoolProperty prop2;
     IntProperty propKernelSize;
     BoolProperty propFastLIC;
+    BoolProperty propEnhance;
+    DoubleProperty propMean;
+    DoubleProperty propSD;
 
     // Attributes
 private:

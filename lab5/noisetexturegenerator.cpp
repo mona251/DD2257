@@ -49,7 +49,7 @@ NoiseTextureGenerator::NoiseTextureGenerator()
     util::hide(propSeedNumber);
 
     propSeed.onChange([this]() {
-        if (propSeed) {
+        if (propSeed.get()) {
             util::show(propSeedNumber);
         } else {
             util::hide(propSeedNumber);

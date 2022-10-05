@@ -31,8 +31,11 @@ LICProcessor::LICProcessor()
     , noiseTexIn_("noiseTexIn")
     , licOut_("licOut")
 
-    , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 10, 1, 100, 1)
+    , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 101, 1, 1000, 10)
     , propFastLIC("fastLIC", "Use Fast LIC", true)
+    , propEnhance("enhance", "Enhance Contrast", true)
+    , propMean("mean", "Desired Mean", 127, 0, 255, 1)
+    , propSD("sd", "Desired Standard Deviation", 50, 0, 255, 1)
 // TODO: Register additional properties
 {
     // Register ports
@@ -42,8 +45,15 @@ LICProcessor::LICProcessor()
 
     // Register properties
     // TODO: Register additional properties
-    addProperties(propFastLIC, propKernelSize);
+    addProperties(propKernelSize, propFastLIC, propEnhance, propMean, propSD);
     
+    propEnhance.onChange([this]() {
+        if (propEnhance.get()) {
+            util::show(propMean, propSD);
+        } else {
+            util::hide(propMean, propSD);
+        }
+    });
 }
 
 void LICProcessor::process() {
@@ -86,9 +96,13 @@ void LICProcessor::process() {
     double stepSize = std::min(pixelSize[0], pixelSize[1]);
 
     if (propFastLIC.get()) {
-        FastLIC(stepSize, visited, vectorField, texture, licImage);
+        fastLIC(stepSize, visited, vectorField, texture, licImage);
     } else {
         LIC(stepSize, vectorField, texture, licImage);
+    }
+
+    if (propEnhance.get()) {
+        enhance(propMean.get(), propSD.get(), licImage);
     }
 
     licOut_.setData(outImage);
@@ -110,7 +124,7 @@ void LICProcessor::LIC(double stepSize, const VectorField2& vectorField,
         }
     }
 }
-void LICProcessor::FastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage) {
+void LICProcessor::fastLIC(double stepSize, std::vector<std::vector<int>>& visited, const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage) {
     for (size_t j = 0; j < texDims_.y; j++) {
         for (size_t i = 0; i < texDims_.x; i++) {
             if (visited[i][j] != 0) {
@@ -130,6 +144,30 @@ void LICProcessor::FastLIC(double stepSize, std::vector<std::vector<int>>& visit
                 licImage.setPixelGrayScale(pixel, gray);
                 visited[pixel[0]][pixel[1]] = 1;
             }
+        }
+    }
+}
+void LICProcessor::enhance(double targetMean, double targetSD, RGBAImage& licImage) {
+    double mean = 0.0;
+    double sumSquare = 0.0;
+    double n = 0.0;
+    for (size_t j = 0; j < texDims_.y; j++) {
+        for (size_t i = 0; i < texDims_.x; i++) {
+            int gray = licImage.readPixelGrayScale(size2_t(i, j));
+            if (gray == 255) continue;
+            mean += gray;
+            sumSquare += pow(gray, 2);
+            n++;
+        }
+    }
+    mean /= n;
+    double sd = sqrt((sumSquare - n * pow(mean, 2)) / (n - 1));
+    double stretch = std::min(targetSD / sd, 10.0);
+    for (size_t j = 0; j < texDims_.y; j++) {
+        for (size_t i = 0; i < texDims_.x; i++) {
+            int gray = licImage.readPixelGrayScale(size2_t(i, j));
+            gray = int(targetMean + stretch * (gray - mean));
+            licImage.setPixelGrayScale(size2_t(i, j), gray);
         }
     }
 }
