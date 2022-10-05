@@ -120,9 +120,13 @@ void LICProcessor::process() {
         LIC(stepSize, vectorField, texture, licImage);
     }
 
-    if (propEnhance.get()) enhanceLIC(propMean.get(), propSD.get(), licImage);
+    if (propEnhance.get()) {
+        enhanceLIC(propMean.get(), propSD.get(), licImage);
+    }
 
-    if (propPaint.get()) colorLIC(vectorField, licImage);
+    if (propPaint.get()) {
+        colorLIC(vectorField, licImage);
+    }
 
     licOut_.setData(outImage);
 }
@@ -134,13 +138,13 @@ void LICProcessor::LIC(double stepSize, const VectorField2& vectorField,
             // For every Pixel calculate streamline
             std::list<dvec2> streamline =
                 Integrator::Streamline(vectorField, position, stepSize, propKernelSize.get());
-            int gray = 0;
+            double gray = 0.0;
             // Box Kernel: Color is averaged across streamline
             for (dvec2 point : streamline) {
                 size2_t pixel = posToPixel(point);
                 gray += texture.readPixelGrayScale(pixel);
             }
-            gray /= streamline.size();
+            gray /= (double)streamline.size();
             // Paint pixel
             licImage.setPixelGrayScale(size2_t(i, j), gray);
         }
@@ -158,12 +162,12 @@ void LICProcessor::fastLIC(double stepSize, std::vector<std::vector<int>>& visit
             std::list<dvec2> streamline =
                 Integrator::Streamline(vectorField, position, stepSize, propKernelSize.get());
             // Box Kernel: Color is average across streamline
-            int gray = 0;
+            double gray = 0.0;
             for (dvec2 point : streamline) {
                 size2_t pixel = posToPixel(point);
                 gray += texture.readPixelGrayScale(pixel);
             }
-            gray /= streamline.size();
+            gray /= (double)streamline.size();
             // Fast LIC: paint all pixels streamline covers
             for (dvec2 point : streamline) {
                 size2_t pixel = posToPixel(point);
@@ -181,7 +185,7 @@ void LICProcessor::enhanceLIC(double targetMean, double targetSD, RGBAImage& lic
     for (size_t j = 0; j < texDims_.y; j++) {
         for (size_t i = 0; i < texDims_.x; i++) {
             int gray = licImage.readPixelGrayScale(size2_t(i, j));
-            if (gray == 255) continue;
+            if (gray == 0) continue;
             mean += gray;
             sumSquare += pow(gray, 2);
             n++;
