@@ -31,7 +31,7 @@ LICProcessor::LICProcessor()
     , noiseTexIn_("noiseTexIn")
     , licOut_("licOut")
 
-    , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 50, 1, 100, 10)
+    , propKernelSize("kernelSize", "Choose Kernel Size (One Diretion)", 50, 1, 500, 10)
     , propFastLIC("fastLIC", "Use Fast LIC", true)
     , propEnhance("enhance", "Enhance Contrast", true)
     , propMean("mean", "Desired Mean", 127, 0, 255, 1)
@@ -39,7 +39,6 @@ LICProcessor::LICProcessor()
     , propNSteps("maxFlic", "N Steps", 1500, 10, 10000, 1)
     , propPaint("paint", "Visualize Vector Field with Color", false)
     , propColor("color", "Colors")
-    , propColorFraction("fraction", "Fraction of Color to LIC Gray", 0.5, 0.0, 1.0, 0.1)
 // TODO: Register additional properties
 {
     // Register ports
@@ -49,7 +48,7 @@ LICProcessor::LICProcessor()
 
     // Register properties
     // TODO: Register additional properties
-    addProperties(propKernelSize, propFastLIC, propEnhance, propMean, propSD, propNSteps, propPaint, propColor, propColorFraction);
+    addProperties(propKernelSize, propFastLIC, propEnhance, propMean, propSD, propNSteps, propPaint, propColor);
     
     propEnhance.onChange([this]() {
         if (propEnhance.get()) {
@@ -59,13 +58,13 @@ LICProcessor::LICProcessor()
         }
     });
     
-    util::hide(propColor, propColorFraction);
+    util::hide(propColor);
     
     propPaint.onChange([this]() {
         if (propPaint.get()) {
-            util::show(propColor, propColorFraction);
+            util::show(propColor);
         } else {
-            util::hide(propColor, propColorFraction);
+            util::hide(propColor);
         }
     });
     
@@ -145,6 +144,7 @@ void LICProcessor::LIC(double stepSize, const VectorField2& vectorField,
         }
     }
 }
+
 void LICProcessor::fastLIC(double stepSize, std::vector<std::vector<int>>& visited,
                            const VectorField2& vectorField, const RGBAImage& texture, RGBAImage& licImage) {
     for (size_t j = 0; j < texDims_.y; j++) {
@@ -205,6 +205,7 @@ void LICProcessor::fastLIC(double stepSize, std::vector<std::vector<int>>& visit
         }
     }
 }
+
 void LICProcessor::enhanceLIC(double targetMean, double targetSD, RGBAImage& licImage) {
     double mean = 0.0;
     double sumSquare = 0.0;
@@ -239,6 +240,7 @@ void LICProcessor::enhanceLIC(double targetMean, double targetSD, RGBAImage& lic
         }
     }
 }
+
 void LICProcessor::colorLIC(const VectorField2& vectorField, RGBAImage& licImage) {
     // Add color to image acording to vector field magnitude and user defined colormap
     // Final color is averaged between the LIC gray and the associated color
@@ -249,13 +251,123 @@ void LICProcessor::colorLIC(const VectorField2& vectorField, RGBAImage& licImage
             double mag = glm::length(vectorField.interpolate(pos));
             double interpolate = (mag - minMax[0]) / (minMax[1] - minMax[0]);
             vec4 color = propColor.get().sample(interpolate);
+            double alpha = color[3];
+            color *= 255.0;
+            
             vec4 gray = licImage.readPixel(size2_t(i, j));
-            vec4 finalColor = color * 255.0 * propColorFraction.get() + gray * (1 - propColorFraction.get());
-            finalColor[3] = 255.0;
+            dvec3 hsv_color = RGBtoHSV(color[0],color[1],color[2]);
+            dvec3 hsv_gray = RGBtoHSV(gray[0],gray[1],gray[2]);
+            ivec3 almost_final_col = HSVtoRGB(hsv_color[0], hsv_color[1]*alpha, hsv_gray[2]);
+            vec4 finalColor = vec4(almost_final_col[0], almost_final_col[1], almost_final_col[2], 255.0);
+
             licImage.setPixel(size2_t(i, j), finalColor);
         }
     }
 }
+
+dvec3 LICProcessor::RGBtoHSV(int R, int G, int B){
+    //R, G and B input range = 0 ÷ 255
+    //H, S and V output range = 0 ÷ 1.0
+    
+    double R_ = R/(double)255;
+    double G_ = G/(double)255;
+    double B_ = B/(double)255;
+    
+    double H = 0;
+    double S = 0;
+
+    double rgbMin = std::min(std::min(R_, G_),B_ );
+    double rgbMax = std::max(std::max(R_, G_),B_ );
+    double del_Max = rgbMax - rgbMin;
+
+    if (del_Max != 0.0){
+        S = del_Max/rgbMax;
+
+        double del_R = (((rgbMax - R_)/6.0) + (del_Max/2.0))/del_Max;
+        double del_G = (((rgbMax - G_)/6.0) + (del_Max/2.0))/del_Max;
+        double del_B = (((rgbMax - B_)/6.0) + (del_Max/2.0))/del_Max;
+
+        if(R_ == rgbMax){
+            H = del_B - del_G;
+        }
+        else if(G_ == rgbMax){
+            H = (1.0/3.0) + del_R - del_B;
+        }
+        else if(B_ == rgbMax){
+            H = (2.0/3.0) + del_G - del_R;
+        }
+
+        if(H < 0.0){
+            H++;
+        }
+        if(H > 1.0){
+            H--;
+        }
+    }
+    //Return HSV
+    return dvec3(H, S, rgbMax);
+}
+
+ivec3 LICProcessor::HSVtoRGB(double H, double S, double V){
+    //H, S and V input range = 0 ÷ 1.0
+    //R, G and B output range = 0 ÷ 255
+    
+    int R = V * 255;
+    int G = V * 255;
+    int B = V * 255; 
+    if(S != 0){
+        double var_h = H * 6.0;
+        if(var_h == 6.0){
+            var_h = 0;
+        }
+        int var_i = int(var_h);
+        double var_1 = V * (1 - S);
+        double var_2 = V * (1 - S * (var_h - (double)var_i));
+        double var_3 = V * (1 - S * (1 - (var_h - (double)var_i)));
+        
+        double var_r = 0;
+        double var_g = 0;
+        double var_b = 0;
+        
+        if(var_i == 0){
+            var_r = V;
+            var_g = var_3;
+            var_b = var_1;
+        }
+        else if(var_i == 1){
+            var_r = var_2;
+            var_g = V;
+            var_b = var_1;
+        }
+        else if(var_i == 2){
+            var_r = var_1;
+            var_g = V;
+            var_b = var_3;
+        }
+        else if(var_i == 3){
+            var_r = var_1;
+            var_g = var_2;
+            var_b = V;
+        }
+        else if(var_i == 4){
+            var_r = var_3;
+            var_g = var_1;
+            var_b = V;
+        }
+        else{
+            var_r = V;
+            var_g = var_1;
+            var_b = var_2;
+        }
+
+        R = var_r * 255.0;
+        G = var_g * 255.0;
+        B = var_b * 255.0;
+    }
+    //Return RGB
+    return ivec3(R, G, B);
+}
+
 dvec2 LICProcessor::getMinMax(const VectorField2& vectorField) {
     // Calculate the min and max magnitudes of the given vector field
     dvec2 minMax = dvec2(INFINITY, 0);

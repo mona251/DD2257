@@ -69,6 +69,8 @@ protected:
     size2_t posToPixel(dvec2 pos);
     dvec2 getMinMax(const VectorField2& vectorField);
     void colorLIC(const VectorField2& vectorField, RGBAImage& licImage);
+    ivec3 HSVtoRGB(double H, double S, double V);
+    dvec3 RGBtoHSV(int R, int G, int B);
     // Ports
 public:
     // Input vector field
@@ -93,7 +95,6 @@ public:
     DoubleProperty propSD;
     BoolProperty propPaint;
     TransferFunctionProperty propColor;
-    DoubleProperty propColorFraction;
 
     // Attributes
 private:
