@@ -85,9 +85,16 @@ protected:
                   std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferSeparatrices,
                   std::vector<BasicMesh::Vertex>& vertices, const vec4 colors[6]);
     void separatrices(dvec2 critPoint, mat2& eigenVectors, double step, double steps,
-                     const VectorField2& vectorField,
+                      const VectorField2& vectorField, const vec4& color,
                      std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferSeparatrices,
                      std::vector<BasicMesh::Vertex>& vertices);
+    std::list<dvec2> boundarySwitchPoints(const VectorField2& vectorField);
+    dvec2 borderDecomposition(const dvec2& v1, const dvec2& v2, dvec2 spacing,
+                              dvec2 pos, const VectorField2& vectorField);
+    void drawBorderPoint(dvec2 bsPoint, double step, double steps, const VectorField2& vectorField,
+                         std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferPoints,
+                         std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferSeparatrices,
+                         std::vector<BasicMesh::Vertex>& vertices);
     // Ports
 public:
     // Input data
@@ -103,8 +110,10 @@ public:
     // TODO: Declare properties
     DoubleProperty propEpsilon;
     DoubleProperty propCenter;
+    BoolProperty propSeparatrices;
     DoubleProperty propStep;
     IntProperty propSteps;
+    BoolProperty propBoundarySwitch;
     // Attributes
 private:
     size2_t dims;

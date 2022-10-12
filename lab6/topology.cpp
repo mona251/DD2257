@@ -5,6 +5,18 @@
  *
  *  License : Follows the Inviwo BSD license model
  **********************************************************************/
+/*********************************************************************
+    6.2 Svar:
+    i origo:
+    center: ex. y,-x ger rotation. flytta med konstanter för att få noll i ösnkad pkt
+    sadel: ex. -x,y ger fält mot nollpkt längs med axlar. flytta med konst. för att få 0 i önskad pkt
+    båda: center.Xsadel.X, center.Ysadel.Y ger bäggre noll pktr
+    skalär-fält topologi = vektor-fält topologi av skalär-fält gradienten
+    a) 3+y, 5-x
+    b) -2-x, -7+y
+    c) (3+y)(-2-x), (5-x)(-7+y)
+    d) cos(x), -sin(y)
+ **********************************************************************/
 
 #include <inviwo/core/datastructures/geometry/basicmesh.h>
 #include <inviwo/core/datastructures/volume/volumeram.h>
@@ -46,8 +58,10 @@ Topology::Topology()
     // (optional)); propertyIdentifier cannot have spaces
     , propEpsilon("epsilon", "Decomposition Min Diagonal Fraction", 0.01, 0.000000001, 1.0, 0.0001)
     , propCenter("center", "Center Threshold for Classification", 0.00005, 0.0, 1.0, 0.00005)
+    , propSeparatrices("separatrices", "Show Separatrices", true)
     , propStep("step", "Streamline Step Size", 0.01, 0.0, 1.0, 0.001)
     , propSteps("steps", "Strealine Max Steps", 1000, 1, 100000, 10)
+    , propBoundarySwitch("bs", "Show Boundary Switch Points", true)
 
 {
     // Register Ports
@@ -57,7 +71,15 @@ Topology::Topology()
 
     // TODO: Register additional properties
     // addProperty(propertyName);
-    addProperties(propEpsilon, propStep, propSteps, propCenter);
+    addProperties(propEpsilon, propCenter, propSeparatrices, propStep, propSteps, propBoundarySwitch);
+
+    propSeparatrices.onChange([this]() {
+    if (propSeparatrices.get()) {
+        util::show(propStep, propSteps);
+    } else {
+        util::hide(propStep, propSteps);
+    }
+    });
 
 }
 
@@ -129,6 +151,13 @@ void Topology::process() {
     for (dvec2 cp : cps) {
         classify(cp, vectorField, indexBufferPoints, indexBufferSeparatrices, vertices, colors);
     }
+    if (propBoundarySwitch.get()) {
+        std::list<dvec2> bsps = boundarySwitchPoints(vectorField);
+        for (dvec2 bsp : bsps) {
+            drawBorderPoint(bsp, propStep.get(), propSteps.get(), vectorField, indexBufferPoints,
+                            indexBufferSeparatrices, vertices);
+        }
+    }
 
     mesh->addVertices(vertices);
     outMesh.setData(mesh);
@@ -155,8 +184,10 @@ void Topology::classify(dvec2 critPoint, const VectorField2& vectorField,
         // Saddle
         if (R1 * R2 < 0) {
             Integrator::drawPoint(critPoint, colors[0], indexBufferPoints.get(), vertices);
-            separatrices(critPoint, eigenResults.eigenvectors, propStep.get(), propSteps.get(), vectorField,
-                        indexBufferSeparatrices, vertices);
+            if (propSeparatrices.get()) {
+                separatrices(critPoint, eigenResults.eigenvectors, propStep.get(), propSteps.get(),
+                             vectorField, vec4(1, 1, 1, 1), indexBufferSeparatrices, vertices);
+            }
             return;
         }
         // Repelling node
@@ -276,26 +307,104 @@ bool Topology::isolated(const dvec2& v, dvec2& pos, const VectorField2& vectorFi
 }
 
 void Topology::separatrices(dvec2 critPoint, mat2& eigenVectors, double step,
-                           double steps, const VectorField2& vectorField,
+                           double steps, const VectorField2& vectorField, const vec4& color,
                            std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferSeparatrices,
                            std::vector<BasicMesh::Vertex>& vertices) {
-    int dir = 1;
     for (int i = 0; i < 2; i++) {
         for (int dir = -1; dir < 2; dir += 2) {
             dvec2 e = eigenVectors[i];
+            if (!vectorField.isInside(critPoint + dir * step * e)) {
+                continue;
+            }
             std::list<dvec2> separatix =
                 Integrator::Streamline(vectorField, critPoint + dir * step * e, step, steps);
             dvec2 prevPoint = separatix.front();
             separatix.pop_front();
             for (dvec2 point : separatix) {
-                Integrator::drawLineSegment(prevPoint, point, vec4(1, 1, 1, 1), indexBufferSeparatrices.get(),
+                Topology::drawLineSegment(prevPoint, point, color, indexBufferSeparatrices.get(),
                                             vertices);
                 prevPoint = point;
             }
         }
     }
 }
+std::list<dvec2> Topology::boundarySwitchPoints(const VectorField2& vectorField) {
+    std::list<dvec2> bsps;
+    // Looping through horizontal vectorfield borders
+    for (size_t j = 0; j < dims[1]; j += dims[1]-1) {
+        for (size_t i = 0; i < dims[0] - 1; ++i) {
+            dvec2 v1 = vectorField.getValueAtVertex(size2_t(i, j));
+            dvec2 v2 = vectorField.getValueAtVertex(size2_t(i + 1, j));
+            dvec2 pos = vectorField.getPositionAtVertex(size2_t(i, j));
 
+            dvec2 bsPoint =
+                borderDecomposition(v1, v2, vectorField.getCellSize() * dvec2(1, 0), pos, vectorField);
+            if (!isnan(bsPoint.x)) {
+                bsps.push_back(bsPoint);
+            }
+        }
+    }
+    // Looping through vertical vectorfield borders
+    for (size_t j = 0; j < dims[1] - 1; j++) {
+        for (size_t i = 0; i < dims[0]; i += dims[0] - 1) {
+            dvec2 v1 = vectorField.getValueAtVertex(size2_t(i, j));
+            dvec2 v2 = vectorField.getValueAtVertex(size2_t(i, j + 1));
+            dvec2 pos = vectorField.getPositionAtVertex(size2_t(i, j));
+
+            dvec2 bsPoint = borderDecomposition(v1, v2, vectorField.getCellSize() * dvec2(0, 1),
+                                                pos, vectorField);
+            if (!isnan(bsPoint.x)) {
+                bsps.push_back(bsPoint);
+            }
+        }
+    }
+    return bsps;
+}
+dvec2 Topology::borderDecomposition(const dvec2& v1, const dvec2& v2,  dvec2 spacing, dvec2 pos,
+    const VectorField2& vectorField) {
+    // v1 v12 v2
+    // Returns nan,nan vector if no boundary switch point is found in sector
+    // Dir variables
+    int along = spacing[0] > 0 ? 0 : 1;
+    int cross = 1 - along;
+    // Run decomposition
+    if (v1[cross] * v2[cross] < 0) {
+        if (spacing[along] <= vectorField.getCellSize()[along] * propEpsilon.get()) {
+            return pos + spacing * 0.5;
+        } else {
+            const dvec2 v12 = vectorField.interpolate(pos + spacing * 0.5);
+            dvec2 positions[2] = {pos, pos + spacing * 0.5};
+            dvec2 sections[2][2] = {
+                {v1, v12}, {v12, v2}};
+            for (int s = 0; s < 2; s++) {
+                dvec2 bsPoint = borderDecomposition(sections[s][0], sections[s][1], spacing * 0.5,
+                                                      positions[s], vectorField);
+                if (!isnan(bsPoint.x)) {
+                    return bsPoint;
+                }
+            }
+        }
+    }
+    return dvec2(NAN, NAN);
+}
+void Topology::drawBorderPoint(dvec2 bsPoint, double step, double steps, const VectorField2& vectorField,
+                               std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferPoints,
+                               std::shared_ptr<inviwo::IndexBufferRAM>& indexBufferSeparatrices,
+                               std::vector<BasicMesh::Vertex>& vertices) {
+    glm::highp_dmat2 J = vectorField.derive(bsPoint);
+    double D = J[0][0] * J[1][1] - J[1][0] * J[0][1];
+    if (D == 0) {
+        return;
+    }
+    util::EigenResult eigenResults = util::eigenAnalysis(J);
+    Integrator::drawPoint(bsPoint, vec4(0.5, 0.5, 0.5, 1), indexBufferPoints.get(), vertices);
+    if (propSeparatrices.get()) {
+        separatrices(bsPoint, eigenResults.eigenvectors, step, steps, vectorField,
+                     vec4(0.5, 0.5, 0.5, 1), indexBufferSeparatrices, vertices);
+    }
+
+
+}
 void Topology::drawLineSegment(const dvec2& v1, const dvec2& v2, const vec4& color,
                                IndexBufferRAM* indexBuffer,
                                std::vector<BasicMesh::Vertex>& vertices) {
